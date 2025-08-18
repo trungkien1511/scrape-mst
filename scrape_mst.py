@@ -53,10 +53,10 @@ def fetch_company_details(path: str, delay: float = 1.5) -> dict:
     phone_td = soup.select_one("td[itemprop='telephone'] span.copy")
     phone = phone_td.get_text(strip=True) if phone_td else ""
 
-    # --- lấy ngày cập nhật ---
+    # --- lấy ngày cập nhật MST ---
     last_update = ""
-    update_td = soup.find("td", string=re.compile(r"Cập nhật mã số thuế"))
-    if update_td:
+    update_td = soup.find("td", colspan="2")  # lấy đúng <td colspan="2">
+    if update_td and "Cập nhật mã số thuế" in update_td.get_text():
         em_tag = update_td.find("em")
         if em_tag:
             last_update = em_tag.get_text(strip=True)
