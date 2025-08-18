@@ -55,18 +55,18 @@ def fetch_company_details(path: str, delay: float = 1.5):
 
     # Ngày cập nhật MST
     last_update = ""
-    update_td = soup.find("td", colspan="2")  # <td colspan="2"> chứa ngày cập nhật
+    update_td = soup.find("td", colspan="2")
     if update_td and "Cập nhật mã số thuế" in update_td.get_text():
         em_tag = update_td.find("em")
         if em_tag:
-            last_update = em_tag.get_text(strip=Tru
+            last_update = em_tag.get_text(strip=True)
 
     time.sleep(delay)
     return phone, representative, last_update
 
 
 # ----------------------------
-# 3. Lưu Google Sheet (giữ lịch sử)
+# 3. Lưu Google Sheet (giữ lịch sử + version mới)
 # ----------------------------
 def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
     scope = ["https://spreadsheets.google.com/feeds",
@@ -76,27 +76,38 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
     client = gspread.authorize(creds)
     sheet = client.open_by_url(sheet_url).worksheet(sheet_name)
 
-    # Lấy toàn bộ dữ liệu hiện có trong sheet
+    # Lấy toàn bộ dữ liệu hiện có
     existing_data = sheet.get_all_records()  # list of dict
-    existing_tax_codes = {row["Mã số thuế"] for row in existing_data}
 
-    # Nếu sheet mới hoàn toàn -> thêm tiêu đề
+    # Nếu sheet rỗng -> thêm tiêu đề
     if not existing_data:
         sheet.append_row(["Tên doanh nghiệp", "Người đại diện",
                           "Mã số thuế", "Số điện thoại", "Ngày cập nhật"])
 
+    # Map mã số thuế -> ngày cập nhật mới nhất đang có trong sheet
+    latest_updates = {}
+    for row in existing_data:
+        tax_code = row["Mã số thuế"]
+        last_update = row.get("Ngày cập nhật", "")
+        if tax_code and last_update:
+            # chỉ giữ ngày mới nhất cho từng MST
+            if tax_code not in latest_updates or last_update > latest_updates[tax_code]:
+                latest_updates[tax_code] = last_update
+
     new_rows = []
     for row in data:
-        if row["tax_code"] not in existing_tax_codes:
-            # Chuẩn bị dòng dữ liệu mới
+        new_last_update = row.get("last_update", "")
+        tax_code = row["tax_code"]
+
+        # Nếu MST chưa có hoặc có bản cập nhật mới hơn thì thêm vào
+        if (tax_code not in latest_updates) or (new_last_update > latest_updates[tax_code]):
             new_row = [row["name"], row.get("representative", ""),
-                       row["tax_code"], row.get("phone", ""),
-                       row.get("last_update", "")]
+                       tax_code, row.get("phone", ""), new_last_update]
             new_rows.append(new_row)
 
-    # Thêm các dòng mới lên đầu (ngay dưới tiêu đề)
+    # Thêm dòng mới ngay dưới tiêu đề (index=2)
     if new_rows:
-        for row in reversed(new_rows):  # đảo ngược để giữ đúng thứ tự
+        for row in reversed(new_rows):  # đảo ngược để giữ thứ tự
             sheet.insert_row(row, index=2)
 
     print(f"✔ Đã thêm {len(new_rows)} dòng mới vào Google Sheet!")
@@ -128,4 +139,3 @@ if __name__ == "__main__":
     save_to_google_sheet(companies,
         "https://docs.google.com/spreadsheets/d/1h_9C60cqcwOhuWS1815gIWdpYmEDjr-_Qu9COQrL7No/edit#gid=0",
         "Sheet1")
-
