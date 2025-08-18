@@ -7,28 +7,19 @@ from oauth2client.service_account import ServiceAccountCredentials
 import json
 import os
 
+# ----------------------------
+# Cấu hình
+# ----------------------------
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 }
 BASE_URL = "https://masothue.com"
-
-# Tạo session với retry
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
-
-session = requests.Session()
-retries = Retry(
-    total=5,
-    backoff_factor=1,
-    status_forcelist=[429, 500, 502, 503, 504]
-)
-adapter = HTTPAdapter(max_retries=retries)
-session.mount("https://", adapter)
-session.mount("http://", adapter)
-
+TARGET_URL = "https://masothue.com/tra-cuu-ma-so-thue-theo-tinh/da-nang-35"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1h_9C60cqcwOhuWS1815gIWdpYmEDjr-_Qu9COQrL7No/edit#gid=0"
+SHEET_NAME = "Sheet1"
 
 # ----------------------------
-# 1. Cào dữ liệu
+# 1. Cào danh sách doanh nghiệp
 # ----------------------------
 def parse_list_page(html: str):
     soup = BeautifulSoup(html, "lxml")
@@ -49,20 +40,32 @@ def parse_list_page(html: str):
             results.append({"name": company_name, "tax_code": tax_code, "link": path})
     return results
 
-
-def fetch_company_phone(path: str, delay: float = 1.5) -> str:
+# ----------------------------
+# 2. Cào chi tiết công ty
+# ----------------------------
+def fetch_company_details(path: str, delay: float = 1.5) -> dict:
     url = BASE_URL + path
-    resp = session.get(url, headers=HEADERS, timeout=20)
+    resp = requests.get(url, headers=HEADERS, timeout=20)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "lxml")
+
+    # --- lấy số điện thoại ---
     phone_td = soup.select_one("td[itemprop='telephone'] span.copy")
     phone = phone_td.get_text(strip=True) if phone_td else ""
-    time.sleep(delay)
-    return phone
 
+    # --- lấy ngày cập nhật ---
+    last_update = ""
+    update_td = soup.find("td", string=re.compile(r"Cập nhật mã số thuế"))
+    if update_td:
+        em_tag = update_td.find("em")
+        if em_tag:
+            last_update = em_tag.get_text(strip=True)
+
+    time.sleep(delay)  # tránh bị chặn
+    return {"phone": phone, "last_update": last_update}
 
 # ----------------------------
-# 2. Lưu Google Sheet
+# 3. Lưu Google Sheet
 # ----------------------------
 def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
     scope = ["https://spreadsheets.google.com/feeds", 
@@ -70,41 +73,37 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
     creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
-
     sheet = client.open_by_url(sheet_url).worksheet(sheet_name)
     sheet.clear()
-
-    # Header
-    values = [["Tên doanh nghiệp", "Mã số thuế", "Số điện thoại"]]
-    # Thêm dữ liệu
+    sheet.append_row(["Tên doanh nghiệp", "Mã số thuế", "Số điện thoại", "Ngày cập nhật MST"])
     for row in data:
-        values.append([row["name"], row["tax_code"], row.get("phone", "")])
-
-    # Update 1 lần cho nhanh
-    sheet.update("A1", values)
+        sheet.append_row([
+            row["name"], 
+            row["tax_code"], 
+            row.get("phone", ""), 
+            row.get("last_update", "")
+        ])
     print("✔ Đã lưu dữ liệu vào Google Sheet!")
 
-
 # ----------------------------
-# 3. Chạy
+# 4. Main
 # ----------------------------
 if __name__ == "__main__":
-    url = "https://masothue.com/tra-cuu-ma-so-thue-theo-tinh/da-nang-35"
-    resp = session.get(url, headers=HEADERS, timeout=20)
+    print("🔎 Đang tải danh sách công ty...")
+    resp = requests.get(TARGET_URL, headers=HEADERS, timeout=20)
     resp.raise_for_status()
     companies = parse_list_page(resp.text)
     print(f"👉 Tìm thấy {len(companies)} công ty.")
 
     for comp in companies:
         try:
-            comp["phone"] = fetch_company_phone(comp["link"])
-            print(f"{comp['tax_code']} - {comp['name']} - {comp['phone']}")
+            details = fetch_company_details(comp["link"])
+            comp["phone"] = details["phone"]
+            comp["last_update"] = details["last_update"]
+            print(f"{comp['tax_code']} | {comp['name']} | {comp['phone']} | {comp['last_update']}")
         except Exception as e:
-            print(f"Lỗi lấy SĐT {comp['tax_code']}: {e}")
+            print(f"⚠ Lỗi lấy chi tiết {comp['tax_code']}: {e}")
             comp["phone"] = ""
+            comp["last_update"] = ""
 
-    save_to_google_sheet(
-        companies,
-        "https://docs.google.com/spreadsheets/d/1h_9C60cqcwOhuWS1815gIWdpYmEDjr-_Qu9COQrL7No/edit#gid=0",
-        "Sheet1"
-    )
+    save_to_google_sheet(companies, SHEET_URL, SHEET_NAME)
