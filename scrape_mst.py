@@ -55,14 +55,26 @@ def fetch_company_details(path: str, delay: float = 1.5) -> dict:
 
     # --- lấy ngày cập nhật MST ---
     last_update = ""
-    update_td = soup.find("td", colspan="2")  # lấy đúng <td colspan="2">
+    update_td = soup.find("td", colspan="2")  # <td colspan="2"> chứa ngày cập nhật
     if update_td and "Cập nhật mã số thuế" in update_td.get_text():
         em_tag = update_td.find("em")
         if em_tag:
             last_update = em_tag.get_text(strip=True)
 
+    # --- lấy người đại diện ---
+    representative = ""
+    rep_tr = soup.find("tr", {"itemprop": "alumni"})
+    if rep_tr:
+        rep_span = rep_tr.find("span", {"itemprop": "name"})
+        if rep_span:
+            representative = rep_span.get_text(strip=True)
+
     time.sleep(delay)  # tránh bị chặn
-    return {"phone": phone, "last_update": last_update}
+    return {
+        "phone": phone,
+        "last_update": last_update,
+        "representative": representative
+    }
 
 # ----------------------------
 # 3. Lưu Google Sheet
@@ -75,10 +87,11 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
     client = gspread.authorize(creds)
     sheet = client.open_by_url(sheet_url).worksheet(sheet_name)
     sheet.clear()
-    sheet.append_row(["Tên doanh nghiệp", "Mã số thuế", "Số điện thoại", "Ngày cập nhật MST"])
+    sheet.append_row(["Tên doanh nghiệp", "Người đại diện", "Mã số thuế", "Số điện thoại", "Ngày cập nhật MST"])
     for row in data:
         sheet.append_row([
             row["name"], 
+            row.get("representative", ""),
             row["tax_code"], 
             row.get("phone", ""), 
             row.get("last_update", "")
@@ -100,10 +113,12 @@ if __name__ == "__main__":
             details = fetch_company_details(comp["link"])
             comp["phone"] = details["phone"]
             comp["last_update"] = details["last_update"]
-            print(f"{comp['tax_code']} | {comp['name']} | {comp['phone']} | {comp['last_update']}")
+            comp["representative"] = details["representative"]
+            print(f"{comp['tax_code']} | {comp['name']} | {comp['representative']} | {comp['phone']} | {comp['last_update']}")
         except Exception as e:
             print(f"⚠ Lỗi lấy chi tiết {comp['tax_code']}: {e}")
             comp["phone"] = ""
             comp["last_update"] = ""
+            comp["representative"] = ""
 
     save_to_google_sheet(companies, SHEET_URL, SHEET_NAME)
