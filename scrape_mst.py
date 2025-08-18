@@ -55,11 +55,11 @@ def fetch_company_details(path: str, delay: float = 1.5):
 
     # Ngày cập nhật MST
     last_update = ""
-    update_td = soup.find("td", string=re.compile("Cập nhật mã số thuế"))
-    if update_td:
-        em = update_td.find("em")
-        if em:
-            last_update = em.get_text(strip=True)
+    update_td = soup.find("td", colspan="2")  # <td colspan="2"> chứa ngày cập nhật
+    if update_td and "Cập nhật mã số thuế" in update_td.get_text():
+        em_tag = update_td.find("em")
+        if em_tag:
+            last_update = em_tag.get_text(strip=Tru
 
     time.sleep(delay)
     return phone, representative, last_update
@@ -128,3 +128,4 @@ if __name__ == "__main__":
     save_to_google_sheet(companies,
         "https://docs.google.com/spreadsheets/d/1h_9C60cqcwOhuWS1815gIWdpYmEDjr-_Qu9COQrL7No/edit#gid=0",
         "Sheet1")
+
