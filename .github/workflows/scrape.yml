@@ -2,7 +2,7 @@ name: Scrape MST
 
 on:
   schedule:
-    - cron: "0 */3 * * *"  # chạy mỗi 3 tiếng
+    - cron: "0 */2 * * *"  # chạy mỗi 3 tiếng
   workflow_dispatch:
 
 jobs:
