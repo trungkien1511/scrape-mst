@@ -83,26 +83,16 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
     if not existing_data:
         sheet.append_row(["Tên doanh nghiệp", "Người đại diện",
                           "Mã số thuế", "Số điện thoại", "Ngày cập nhật"])
-
-    # Map mã số thuế -> ngày cập nhật mới nhất đang có trong sheet
-    latest_updates = {}
-    for row in existing_data:
-        tax_code = row["Mã số thuế"]
-        last_update = row.get("Ngày cập nhật", "")
-        if tax_code and last_update:
-            # chỉ giữ ngày mới nhất cho từng MST
-            if tax_code not in latest_updates or last_update > latest_updates[tax_code]:
-                latest_updates[tax_code] = last_update
+        existing_tax_codes = set()
+    else:
+        existing_tax_codes = {row["Mã số thuế"] for row in existing_data if row.get("Mã số thuế")}
 
     new_rows = []
     for row in data:
-        new_last_update = row.get("last_update", "")
         tax_code = row["tax_code"]
-
-        # Nếu MST chưa có hoặc có bản cập nhật mới hơn thì thêm vào
-        if (tax_code not in latest_updates) or (new_last_update > latest_updates[tax_code]):
+        if tax_code not in existing_tax_codes:   # chỉ thêm MST chưa có
             new_row = [row["name"], row.get("representative", ""),
-                       tax_code, row.get("phone", ""), new_last_update]
+                       tax_code, row.get("phone", ""), row.get("last_update", "")]
             new_rows.append(new_row)
 
     # Thêm dòng mới ngay dưới tiêu đề (index=2)
@@ -111,7 +101,6 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
             sheet.insert_row(row, index=2)
 
     print(f"✔ Đã thêm {len(new_rows)} dòng mới vào Google Sheet!")
-
 
 # ----------------------------
 # 4. Chạy chính
@@ -139,3 +128,4 @@ if __name__ == "__main__":
     save_to_google_sheet(companies,
         "https://docs.google.com/spreadsheets/d/1h_9C60cqcwOhuWS1815gIWdpYmEDjr-_Qu9COQrL7No/edit#gid=0",
         "Sheet1")
+
