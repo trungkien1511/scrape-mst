@@ -76,31 +76,31 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
     client = gspread.authorize(creds)
     sheet = client.open_by_url(sheet_url).worksheet(sheet_name)
 
-    # Lấy toàn bộ dữ liệu hiện có
-    existing_data = sheet.get_all_records()  # list of dict
+    # Lấy toàn bộ cột "Mã số thuế" để kiểm tra trùng lặp
+    existing_tax_codes = set(tc.strip() for tc in sheet.col_values(3)[1:] if tc.strip())  
+    # cột 3 = "Mã số thuế", bỏ hàng tiêu đề
 
-    # Nếu sheet rỗng -> thêm tiêu đề
-    if not existing_data:
+    # Nếu sheet trống -> thêm tiêu đề
+    if sheet.row_count == 0 or not sheet.row_values(1):
         sheet.append_row(["Tên doanh nghiệp", "Người đại diện",
                           "Mã số thuế", "Số điện thoại", "Ngày cập nhật"])
         existing_tax_codes = set()
-    else:
-        existing_tax_codes = {row["Mã số thuế"] for row in existing_data if row.get("Mã số thuế")}
 
     new_rows = []
     for row in data:
-        tax_code = row["tax_code"]
-        if tax_code not in existing_tax_codes:   # chỉ thêm MST chưa có
+        tax_code = row["tax_code"].strip()
+        if tax_code not in existing_tax_codes:  # chỉ thêm nếu chưa có
             new_row = [row["name"], row.get("representative", ""),
                        tax_code, row.get("phone", ""), row.get("last_update", "")]
             new_rows.append(new_row)
 
     # Thêm dòng mới ngay dưới tiêu đề (index=2)
     if new_rows:
-        for row in reversed(new_rows):  # đảo ngược để giữ thứ tự
+        for row in reversed(new_rows):
             sheet.insert_row(row, index=2)
 
     print(f"✔ Đã thêm {len(new_rows)} dòng mới vào Google Sheet!")
+
 
 # ----------------------------
 # 4. Chạy chính
@@ -128,4 +128,5 @@ if __name__ == "__main__":
     save_to_google_sheet(companies,
         "https://docs.google.com/spreadsheets/d/1h_9C60cqcwOhuWS1815gIWdpYmEDjr-_Qu9COQrL7No/edit#gid=0",
         "Sheet1")
+
 
