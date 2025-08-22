@@ -2,7 +2,7 @@ name: Scrape MST
 
 on:
   schedule:
-    # chạy vào phút 0 và 30, từ 0h đến 15h UTC (tương đương 7h–22h VN)
+    # chạy mỗi 15 phút, từ 0h đến 15h UTC (tức 7h–22h VN)
     - cron: "*/15 0-15 * * *"
   workflow_dispatch:      # cho phép chạy thủ công từ GitHub UI
 
