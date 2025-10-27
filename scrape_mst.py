@@ -59,14 +59,18 @@ def fetch_company_details(path: str):
         representative = rep_td.get_text(strip=True) if rep_td else ""
 
         # Ngày hoạt động
-        active_date_td = soup.find("td", string=re.compile("Ngày hoạt động"))
+        # Ngày hoạt động
         active_date = ""
-        if active_date_td:
-            next_td = active_date_td.find_next("td")
-            if next_td:
-                span = next_td.find("span", class_="copy")
-                if span:
-                    active_date = span.get_text(strip=True)
+        active_tr = soup.find("tr", string=lambda t: t and "Ngày hoạt động" in t)
+        if not active_tr:
+            # Nếu không khớp trực tiếp, tìm qua icon fa-calendar
+            active_tr = soup.find("i", class_="fa fa-calendar")
+            if active_tr:
+                active_tr = active_tr.find_parent("tr")
+        if active_tr:
+            span = active_tr.find("span", class_="copy")
+            if span:
+                active_date = span.get_text(strip=True)
 
         # Ngày cập nhật MST
         last_update = ""
@@ -152,5 +156,6 @@ if __name__ == "__main__":
     save_to_google_sheet(companies,
         "https://docs.google.com/spreadsheets/d/1h_9C60cqcwOhuWS1815gIWdpYmEDjr-_Qu9COQrL7No/edit#gid=0",
         "Sheet1")
+
 
 
