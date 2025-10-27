@@ -1,5 +1,6 @@
 import re
 import time
+import random
 import requests
 from bs4 import BeautifulSoup
 import gspread
@@ -7,6 +8,9 @@ from oauth2client.service_account import ServiceAccountCredentials
 import json
 import os
 
+# ----------------------------
+# 1. Cấu hình cơ bản
+# ----------------------------
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 }
@@ -14,7 +18,7 @@ BASE_URL = "https://masothue.com"
 
 
 # ----------------------------
-# 1. Cào danh sách công ty
+# 2. Cào danh sách công ty
 # ----------------------------
 def parse_list_page(html: str):
     soup = BeautifulSoup(html, "lxml")
@@ -37,40 +41,56 @@ def parse_list_page(html: str):
 
 
 # ----------------------------
-# 2. Lấy chi tiết công ty
+# 3. Lấy chi tiết công ty
 # ----------------------------
-def fetch_company_details(path: str, delay: float = 1.5):
+def fetch_company_details(path: str):
     url = BASE_URL + path
-    resp = requests.get(url, headers=HEADERS, timeout=20)
-    resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "lxml")
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=20)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "lxml")
 
-    # Số điện thoại
-    phone_td = soup.select_one("td[itemprop='telephone'] span.copy")
-    phone = phone_td.get_text(strip=True) if phone_td else ""
+        # Số điện thoại
+        phone_td = soup.select_one("td[itemprop='telephone'] span.copy")
+        phone = phone_td.get_text(strip=True) if phone_td else ""
 
-    # Người đại diện
-    rep_td = soup.select_one("tr[itemprop='alumni'] span[itemprop='name']")
-    representative = rep_td.get_text(strip=True) if rep_td else ""
+        # Người đại diện
+        rep_td = soup.select_one("tr[itemprop='alumni'] span[itemprop='name']")
+        representative = rep_td.get_text(strip=True) if rep_td else ""
 
-    # Ngày cập nhật MST
-    last_update = ""
-    update_td = soup.find("td", colspan="2")
-    if update_td and "Cập nhật mã số thuế" in update_td.get_text():
-        em_tag = update_td.find("em")
-        if em_tag:
-            last_update = em_tag.get_text(strip=True)
+        # Ngày hoạt động
+        active_date_td = soup.find("td", string=re.compile("Ngày hoạt động"))
+        active_date = ""
+        if active_date_td:
+            next_td = active_date_td.find_next("td")
+            if next_td:
+                span = next_td.find("span", class_="copy")
+                if span:
+                    active_date = span.get_text(strip=True)
 
-    # Địa chỉ
-    addr_td = soup.select_one("td[itemprop='address'] span.copy")
-    address = addr_td.get_text(strip=True) if addr_td else ""
+        # Ngày cập nhật MST
+        last_update = ""
+        update_td = soup.find("td", colspan="2")
+        if update_td and "Cập nhật mã số thuế" in update_td.get_text():
+            em_tag = update_td.find("em")
+            if em_tag:
+                last_update = em_tag.get_text(strip=True)
 
-    time.sleep(delay)
-    return phone, representative, last_update, address
+        # Địa chỉ
+        addr_td = soup.select_one("td[itemprop='address'] span.copy")
+        address = addr_td.get_text(strip=True) if addr_td else ""
+
+        # Delay nhẹ để tránh bị chặn
+        time.sleep(random.uniform(1.2, 2.5))
+        return phone, representative, active_date, last_update, address
+
+    except Exception as e:
+        print(f"⚠ Lỗi khi lấy chi tiết {url}: {e}")
+        return "", "", "", "", ""
 
 
 # ----------------------------
-# 3. Lưu Google Sheet (giữ lịch sử + không trùng MST)
+# 4. Lưu Google Sheet (giữ lịch sử + không trùng MST)
 # ----------------------------
 def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
     scope = ["https://spreadsheets.google.com/feeds",
@@ -84,60 +104,60 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
     if sheet.row_count == 0 or not sheet.row_values(1):
         sheet.append_row([
             "Tên doanh nghiệp", "Người đại diện",
-            "Mã số thuế", "Số điện thoại", "Ngày cập nhật", "Địa chỉ"
+            "Mã số thuế", "Số điện thoại", "Ngày hoạt động",
+            "Ngày cập nhật", "Địa chỉ"
         ])
 
     # Lấy toàn bộ cột "Mã số thuế" để kiểm tra trùng lặp
-    existing_tax_codes = set(tc.strip() for tc in sheet.col_values(3)[1:] if tc.strip())  
-    # cột 3 = "Mã số thuế", bỏ hàng tiêu đề
+    existing_tax_codes = set(tc.strip() for tc in sheet.col_values(3)[1:] if tc.strip())
 
     new_rows = []
     for row in data:
         tax_code = row["tax_code"].strip()
-        if tax_code not in existing_tax_codes:  # chỉ thêm nếu chưa có
+        if tax_code not in existing_tax_codes:
             new_row = [
                 row["name"],
                 row.get("representative", ""),
                 tax_code,
                 row.get("phone", ""),
+                row.get("active_date", ""),
                 row.get("last_update", ""),
                 row.get("address", "")
             ]
             new_rows.append(new_row)
 
-    # Thêm dòng mới ngay dưới tiêu đề (index=2)
+    # Thêm dòng mới lên đầu (sau tiêu đề)
     if new_rows:
         for row in reversed(new_rows):
             sheet.insert_row(row, index=2)
-
-    print(f"✔ Đã thêm {len(new_rows)} dòng mới vào Google Sheet!")
+        print(f"✅ Đã thêm {len(new_rows)} doanh nghiệp mới vào Google Sheet.")
+    else:
+        print("ℹ Không có doanh nghiệp mới để thêm.")
 
 
 # ----------------------------
-# 4. Chạy chính
+# 5. Chạy chính
 # ----------------------------
 if __name__ == "__main__":
+    print("🚀 Bắt đầu cào dữ liệu doanh nghiệp Đà Nẵng...")
     url = "https://masothue.com/tra-cuu-ma-so-thue-theo-tinh/da-nang-35"
     resp = requests.get(url, headers=HEADERS, timeout=20)
     resp.raise_for_status()
+
     companies = parse_list_page(resp.text)
-    print(f"👉 Tìm thấy {len(companies)} công ty.")
+    print(f"👉 Tìm thấy {len(companies)} công ty trong danh sách đầu tiên.")
 
     for comp in companies:
-        try:
-            phone, rep, last_update, address = fetch_company_details(comp["link"])
-            comp["phone"] = phone
-            comp["representative"] = rep
-            comp["last_update"] = last_update
-            comp["address"] = address
-            print(f"{comp['tax_code']} | {comp['name']} | {rep} | {phone} | {last_update} | {address}")
-        except Exception as e:
-            print(f"Lỗi lấy chi tiết {comp['tax_code']}: {e}")
-            comp["phone"] = ""
-            comp["representative"] = ""
-            comp["last_update"] = ""
-            comp["address"] = ""
+        phone, rep, active_date, last_update, address = fetch_company_details(comp["link"])
+        comp["phone"] = phone
+        comp["representative"] = rep
+        comp["active_date"] = active_date
+        comp["last_update"] = last_update
+        comp["address"] = address
+        print(f"{comp['tax_code']} | {comp['name']} | {rep} | {phone} | {active_date} | {last_update} | {address}")
 
     save_to_google_sheet(companies,
         "https://docs.google.com/spreadsheets/d/1h_9C60cqcwOhuWS1815gIWdpYmEDjr-_Qu9COQrL7No/edit#gid=0",
         "Sheet1")
+
+    print("🎯 Hoàn tất.")
