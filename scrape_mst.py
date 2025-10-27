@@ -85,7 +85,6 @@ def fetch_company_details(path: str):
         return phone, representative, active_date, last_update, address
 
     except Exception as e:
-        print(f"⚠ Lỗi khi lấy chi tiết {url}: {e}")
         return "", "", "", "", ""
 
 
@@ -130,22 +129,16 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
     if new_rows:
         for row in reversed(new_rows):
             sheet.insert_row(row, index=2)
-        print(f"✅ Đã thêm {len(new_rows)} doanh nghiệp mới vào Google Sheet.")
-    else:
-        print("ℹ Không có doanh nghiệp mới để thêm.")
-
 
 # ----------------------------
 # 5. Chạy chính
 # ----------------------------
 if __name__ == "__main__":
-    print("🚀 Bắt đầu cào dữ liệu doanh nghiệp Đà Nẵng...")
     url = "https://masothue.com/tra-cuu-ma-so-thue-theo-tinh/da-nang-35"
     resp = requests.get(url, headers=HEADERS, timeout=20)
     resp.raise_for_status()
 
     companies = parse_list_page(resp.text)
-    print(f"👉 Tìm thấy {len(companies)} công ty trong danh sách đầu tiên.")
 
     for comp in companies:
         phone, rep, active_date, last_update, address = fetch_company_details(comp["link"])
@@ -160,4 +153,4 @@ if __name__ == "__main__":
         "https://docs.google.com/spreadsheets/d/1h_9C60cqcwOhuWS1815gIWdpYmEDjr-_Qu9COQrL7No/edit#gid=0",
         "Sheet1")
 
-    print("🎯 Hoàn tất.")
+
