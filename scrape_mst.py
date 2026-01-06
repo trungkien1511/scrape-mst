@@ -7,6 +7,8 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
 import os
+import unicodedata
+
 
 # ----------------------------
 # 1. Cấu hình cơ bản
@@ -172,6 +174,7 @@ if __name__ == "__main__":
     save_to_google_sheet(companies,
         "https://docs.google.com/spreadsheets/d/1BVtCQdRwuswW812yCF918iKyb5l5A9PKPWZi8VZt_Io/edit?gid=0#gid=0",
         "Sheet1")
+
 
 
 
