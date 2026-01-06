@@ -16,6 +16,18 @@ HEADERS = {
 }
 BASE_URL = "https://masothue.com"
 
+def normalize_text(s: str) -> str:
+    s = s.strip().lower()
+    # bỏ dấu tiếng Việt
+    s = unicodedata.normalize("NFD", s)
+    s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
+    # chuẩn hoá khoảng trắng
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+def should_skip_company(name: str) -> bool:
+    n = normalize_text(name)
+    return ("van phong dai dien" in n) or ("chi nhanh" in n)
 
 # ----------------------------
 # 2. Cào danh sách công ty
@@ -26,6 +38,8 @@ def parse_list_page(html: str):
     for block in soup.select("div.tax-listing div[data-prefetch]"):
         h3a = block.select_one("h3 > a")
         company_name = h3a.get_text(strip=True) if h3a else ""
+        if company_name and should_skip_company(company_name):
+            continue
         tax_code = ""
         info_div = block.find("div")
         if info_div:
@@ -116,6 +130,8 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
 
     new_rows = []
     for row in data:
+        if should_skip_company(row["name"]):
+            continue
         tax_code = row["tax_code"].strip()
         if tax_code not in existing_tax_codes:
             new_row = [
@@ -156,6 +172,7 @@ if __name__ == "__main__":
     save_to_google_sheet(companies,
         "https://docs.google.com/spreadsheets/d/1BVtCQdRwuswW812yCF918iKyb5l5A9PKPWZi8VZt_Io/edit?gid=0#gid=0",
         "Sheet1")
+
 
 
 
