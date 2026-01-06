@@ -18,7 +18,7 @@ HEADERS = {
 }
 BASE_URL = "https://masothue.com"
 
-SKIP_REGEX = re.compile(r"(van\s*phong\s*dai\s*dien|chi\s*nhanh)", re.IGNORECASE)
+SKIP_REGEX = re.compile(r"(van\s*phong|chi\s*nhanh)", re.IGNORECASE)
 
 def normalize_text(s: str) -> str:
     s = (s or "").strip().lower()
@@ -27,7 +27,7 @@ def normalize_text(s: str) -> str:
     s = unicodedata.normalize("NFD", s)
     s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
 
-    # đổi mọi ký tự không phải chữ/số thành space (kể cả ký tự "lạ", zero-width, NBSP...)
+    # mọi ký tự lạ -> space
     s = re.sub(r"[^a-z0-9]+", " ", s)
 
     # gộp khoảng trắng
@@ -181,3 +181,4 @@ if __name__ == "__main__":
     save_to_google_sheet(companies,
         "https://docs.google.com/spreadsheets/d/1BVtCQdRwuswW812yCF918iKyb5l5A9PKPWZi8VZt_Io/edit?gid=0#gid=0",
         "Sheet1")
+
