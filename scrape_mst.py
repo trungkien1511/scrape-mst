@@ -154,8 +154,9 @@ if __name__ == "__main__":
         print(f"{comp['tax_code']} | {comp['name']} | {rep} | {phone} | {active_date} | {last_update} | {address}")
 
     save_to_google_sheet(companies,
-        "https://docs.google.com/spreadsheets/d/1h_9C60cqcwOhuWS1815gIWdpYmEDjr-_Qu9COQrL7No/edit#gid=0",
+        "https://docs.google.com/spreadsheets/d/1BVtCQdRwuswW812yCF918iKyb5l5A9PKPWZi8VZt_Io/edit?gid=0#gid=0",
         "Sheet1")
+
 
 
 
