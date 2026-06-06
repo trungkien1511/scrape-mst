@@ -163,7 +163,7 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
 # 5. Chạy chính
 # ----------------------------
 if __name__ == "__main__":
-    url = "https://masothue.com/tra-cuu-ma-so-thue-theo-tinh/da-nang-35"
+    url = "https://masothue.com/tra-cuu-ma-so-thue-theo-tinh/da-nang-35?page=2"
     resp = requests.get(url, headers=HEADERS, timeout=20)
     resp.raise_for_status()
 
@@ -172,7 +172,7 @@ if __name__ == "__main__":
     for comp in companies:
         phone, rep, active_date, last_update, address = fetch_company_details(comp["link"])
         comp["phone"] = phone
-        comp["representative"] = rep
+        comp["representative"] = repm
         comp["active_date"] = active_date
         comp["last_update"] = last_update
         comp["address"] = address
