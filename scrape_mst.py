@@ -178,12 +178,12 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
 # ----------------------------
 if __name__ == "__main__":
     # NHẬP SỐ TRANG CẦN CRAWL
-    n = 10
+    n = 15
     
     all_companies = []
     
     # Crawl từ page 1 đến page n
-    for page in range(2, n + 1):
+    for page in range(10, n + 1):
         companies_on_page = fetch_all_companies_from_page(page)
         all_companies.extend(companies_on_page)
         print(f"Hoàn thành page {page}/{n}\n")
