@@ -62,6 +62,20 @@ def parse_list_page(html: str):
             results.append({"name": company_name, "tax_code": tax_code, "link": path})
     return results
 
+def fetch_all_companies_from_page(page_num):
+    """Lấy danh sách công ty từ một page cụ thể"""
+    url = f"https://masothue.com/tra-cuu-ma-so-thue-theo-tinh/da-nang-35?page={page_num}"
+    try:
+        print(f"Đang crawl page {page_num}...")
+        resp = requests.get(url, headers=HEADERS, timeout=20)
+        resp.raise_for_status()
+        companies = parse_list_page(resp.text)
+        print(f"  Tìm thấy {len(companies)} công ty trên page {page_num}")
+        time.sleep(random.uniform(1, 2))  # Delay giữa các page
+        return companies
+    except Exception as e:
+        print(f"Lỗi khi crawl page {page_num}: {e}")
+        return []
 
 # ----------------------------
 # 3. Lấy chi tiết công ty
@@ -81,7 +95,6 @@ def fetch_company_details(path: str):
         rep_td = soup.select_one("tr[itemprop='alumni'] span[itemprop='name']")
         representative = rep_td.get_text(strip=True) if rep_td else ""
 
-        # Ngày hoạt động
         # Ngày hoạt động
         active_date = ""
         active_tr = soup.find("tr", string=lambda t: t and "Ngày hoạt động" in t)
@@ -112,8 +125,8 @@ def fetch_company_details(path: str):
         return phone, representative, active_date, last_update, address
 
     except Exception as e:
+        print(f"Lỗi khi lấy chi tiết {path}: {e}")
         return "", "", "", "", ""
-
 
 # ----------------------------
 # 4. Lưu Google Sheet (giữ lịch sử + không trùng MST)
@@ -158,26 +171,44 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
     if new_rows:
         for row in reversed(new_rows):
             sheet.insert_row(row, index=2)
+        print(f"Đã thêm {len(new_rows)} công ty mới vào Google Sheet")
+    else:
+        print("Không có công ty mới để thêm vào Google Sheet")
 
 # ----------------------------
 # 5. Chạy chính
 # ----------------------------
 if __name__ == "__main__":
-    url = "https://masothue.com/tra-cuu-ma-so-thue-theo-tinh/da-nang-35"
-    resp = requests.get(url, headers=HEADERS, timeout=20)
-    resp.raise_for_status()
-
-    companies = parse_list_page(resp.text)
-
-    for comp in companies:
+    # NHẬP KHOẢNG TRANG CẦN CRAWL
+    start_page = 1
+    end_page = 7
+    
+    all_companies = []
+    
+    # Crawl từ start_page đến end_page
+    for page in range(start_page, end_page + 1):
+        companies_on_page = fetch_all_companies_from_page(page)
+        all_companies.extend(companies_on_page)
+        print(f"Hoàn thành page {page}/{end_page}\n")
+    
+    print(f"\nTổng số công ty thu thập được: {len(all_companies)}")
+    print("Bắt đầu lấy chi tiết từng công ty...\n")
+    
+    # Lấy chi tiết cho từng công ty
+    for idx, comp in enumerate(all_companies, 1):
+        print(f"Đang xử lý {idx}/{len(all_companies)}: {comp['name']}")
         phone, rep, active_date, last_update, address = fetch_company_details(comp["link"])
         comp["phone"] = phone
         comp["representative"] = rep
         comp["active_date"] = active_date
         comp["last_update"] = last_update
         comp["address"] = address
-        print(f"{comp['tax_code']} | {comp['name']} | {rep} | {phone} | {active_date} | {last_update} | {address}")
-
-    save_to_google_sheet(companies,
+        print(f"  MST: {comp['tax_code']} | Đại diện: {rep} | ĐT: {phone}")
+    
+    # Lưu vào Google Sheet
+    print("\nĐang lưu dữ liệu vào Google Sheet...")
+    save_to_google_sheet(all_companies,
         "https://docs.google.com/spreadsheets/d/1BVtCQdRwuswW812yCF918iKyb5l5A9PKPWZi8VZt_Io/edit?gid=0#gid=0",
         "Sheet1")
+    
+    print("Hoàn thành!")
