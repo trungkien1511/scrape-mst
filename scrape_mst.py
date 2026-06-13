@@ -172,7 +172,7 @@ if __name__ == "__main__":
     for comp in companies:
         phone, rep, active_date, last_update, address = fetch_company_details(comp["link"])
         comp["phone"] = phone
-        comp["representative"] = repm
+        comp["representative"] = rep
         comp["active_date"] = active_date
         comp["last_update"] = last_update
         comp["address"] = address
