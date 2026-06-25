@@ -142,9 +142,13 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
     # Nếu sheet trống -> thêm tiêu đề
     if sheet.row_count == 0 or not sheet.row_values(1):
         sheet.append_row([
-            "Tên doanh nghiệp", "Người đại diện",
-            "Mã số thuế", "Số điện thoại", "Ngày hoạt động",
-            "Ngày cập nhật", "Địa chỉ"
+            "Mã số thuế", 
+            "Số điện thoại", 
+            "Người đại diện",      # <-- Vị trí mới
+            "Tên doanh nghiệp", 
+            "Ngày hoạt động", 
+            "Ngày cập nhật", 
+            "Địa chỉ"
         ])
 
     # Lấy toàn bộ cột "Mã số thuế" để kiểm tra trùng lặp
@@ -158,9 +162,9 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
         if tax_code not in existing_tax_codes:
             new_row = [
                 row["name"],
-                row.get("representative", ""),
                 tax_code,
                 row.get("phone", ""),
+                row.get("representative", ""),
                 row.get("active_date", ""),
                 row.get("last_update", ""),
                 row.get("address", "")
