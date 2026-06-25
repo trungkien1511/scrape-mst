@@ -139,7 +139,7 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
     client = gspread.authorize(creds)
     sheet = client.open_by_url(sheet_url).worksheet(sheet_name)
 
-    # Nếu sheet trống -> thêm tiêu đề
+    # Header mới: MST → SĐT → Người đại diện → Tên → Ngày hoạt động → Cập nhật → Địa chỉ
     if sheet.row_count == 0 or not sheet.row_values(1):
         sheet.append_row([
             "Mã số thuế", 
@@ -151,8 +151,8 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
             "Địa chỉ"
         ])
 
-    # Lấy toàn bộ cột "Mã số thuế" để kiểm tra trùng lặp
-    existing_tax_codes = set(tc.strip() for tc in sheet.col_values(3)[1:] if tc.strip())
+    # Kiểm tra trùng MST (cột 1)
+    existing_tax_codes = set(tc.strip() for tc in sheet.col_values(1)[1:] if tc.strip())
 
     new_rows = []
     for row in data:
@@ -161,17 +161,16 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
         tax_code = row["tax_code"].strip()
         if tax_code not in existing_tax_codes:
             new_row = [
-                row["name"],
-                tax_code,
-                row.get("phone", ""),
-                row.get("representative", ""),
-                row.get("active_date", ""),
-                row.get("last_update", ""),
-                row.get("address", "")
+                tax_code,                        # 1. Mã số thuế
+                row.get("phone", ""),            # 2. Số điện thoại
+                row.get("representative", ""),   # 3. Người đại diện (đã chuyển lên)
+                row["name"],                     # 4. Tên doanh nghiệp
+                row.get("active_date", ""),      # 5. Ngày hoạt động
+                row.get("last_update", ""),      # 6. Ngày cập nhật
+                row.get("address", "")           # 7. Địa chỉ
             ]
             new_rows.append(new_row)
 
-    # Thêm dòng mới lên đầu (sau tiêu đề)
     if new_rows:
         for row in reversed(new_rows):
             sheet.insert_row(row, index=2)
