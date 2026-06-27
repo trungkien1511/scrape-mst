@@ -3,7 +3,7 @@ name: Scrape MST
 on:
   schedule:
     # Chạy mỗi 15 phút, từ 0h đến 15h UTC (tức 7h–22h Việt Nam)
-    - cron: "*/15 0-15 * * *"
+    - cron: "*/45 0-15 * * *"
   workflow_dispatch:      # Cho phép chạy thủ công
 
 jobs:
