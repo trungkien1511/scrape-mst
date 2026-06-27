@@ -57,7 +57,7 @@ def classify_location(address):
     # Gần Đà Nẵng (Quảng Nam giáp ranh)
     nearby = [
         'Phường Điện Bàn', 'Phường Điện Bàn Đông', 'Phường Điện Bàn Tây',
-        'Phường Điện Bàn Bắc', 'Phường An Thắng',
+        'Phường Điện Bàn Bắc', 'Phường Bàn Thạch', 'Phường An Thắng',
         'Phường Hội An', 'Phường Hội An Đông', 'Phường Hội An Tây'
     ]
     
@@ -78,15 +78,15 @@ def classify_location(address):
     return "KHAC"
 
 # ----------------------------
-# 3. Lưu vào Google Sheet (2 sheet: Sheet1 và Sheet2)
+# 3. Lưu vào Google Sheet (2 sheet: Sheet2 và Sheet3)
 # ----------------------------
-def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet1", sheet_name_other="Sheet2"):
+def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet2", sheet_name_other="Sheet3"):
     """
     Lưu dữ liệu vào 2 sheet với thứ tự cột:
     Tên Công Ty | Mã Số Thuế | Số Điện Thoại | Người đại diện | Ngày Cấp | Ngày Cập Nhật | Địa Chỉ | Phân Loại
     
-    - Sheet1: TRONG_DA_NANG + NGOAI_THANH_DA_NANG + GAN_DA_NANG
-    - Sheet2: KHAC (bao gồm Duy Xuyên và các khu vực khác)
+    - Sheet2: TRONG_DA_NANG + NGOAI_THANH_DA_NANG + GAN_DA_NANG
+    - Sheet3: KHAC (bao gồm Duy Xuyên và các khu vực khác)
     """
     scope = ["https://spreadsheets.google.com/feeds",
              "https://www.googleapis.com/auth/drive"]
@@ -163,14 +163,14 @@ def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet1", sheet_name_
                 other_rows.append(new_row)
                 existing_other_tax.add(tax_code)
     
-    # Ghi vào main sheet (Sheet1)
+    # Ghi vào main sheet (Sheet2)
     if main_rows:
         main_sheet.append_rows(main_rows)
         print(f"Đã thêm {len(main_rows)} công ty vào sheet '{sheet_name_main}'")
     else:
         print(f"Không có công ty mới để thêm vào sheet '{sheet_name_main}'")
     
-    # Ghi vào other sheet (Sheet2)
+    # Ghi vào other sheet (Sheet3)
     if other_rows:
         other_sheet.append_rows(other_rows)
         print(f"Đã thêm {len(other_rows)} công ty vào sheet '{sheet_name_other}'")
@@ -289,10 +289,10 @@ if __name__ == "__main__":
     main_count, other_count = save_to_google_sheets(
         all_companies,
         "https://docs.google.com/spreadsheets/d/1BVtCQdRwuswW812yCF918iKyb5l5A9PKPWZi8VZt_Io/edit?gid=0#gid=0",
-        "Sheet2",  # Sheet 1: TRONG_DA_NANG + NGOAI_THANH_DA_NANG + GAN_DA_NANG
-        "Sheet3"   # Sheet 2: KHAC (bao gồm Duy Xuyên và các khu vực khác)
+        "Sheet2",  # Sheet 2: TRONG_DA_NANG + NGOAI_THANH_DA_NANG + GAN_DA_NANG
+        "Sheet3"   # Sheet 3: KHAC (bao gồm Duy Xuyên và các khu vực khác)
     )
     
     print(f"\n✅ Hoàn thành!")
-    print(f"   - Sheet 'Sheet1': {main_count} công ty mới")
-    print(f"   - Sheet 'Sheet2': {other_count} công ty mới")
+    print(f"   - Sheet 'Sheet2': {main_count} công ty mới")
+    print(f"   - Sheet 'Sheet3': {other_count} công ty mới")
