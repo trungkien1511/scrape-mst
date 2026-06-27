@@ -262,8 +262,8 @@ def fetch_company_details(path: str):
 # 5. Chạy chính
 # ----------------------------
 if __name__ == "__main__":
-    start_page = 1
-    end_page = 5
+    start_page = 6
+    end_page = 10
     
     all_companies = []
     
