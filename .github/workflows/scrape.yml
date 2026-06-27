@@ -2,17 +2,20 @@ name: Scrape MST
 
 on:
   schedule:
-    # Chạy mỗi 15 phút, từ 0h đến 15h UTC (tức 7h–22h Việt Nam)
     - cron: "*/45 0-15 * * *"
-  workflow_dispatch:      # Cho phép chạy thủ công
+  workflow_dispatch:
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # THÊM QUYỀN NÀY
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -27,3 +30,13 @@ jobs:
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
         run: python scrape_mst.py
+      
+      # THÊM BƯỚC NÀY ĐỂ TẠO HOẠT ĐỘNG CHO REPOSITORY
+      - name: Keep repository active
+        run: |
+          echo "Last run: $(date)" > .last_run
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .last_run
+          git commit -m "Auto-update: $(date)" || echo "No changes"
+          git push || echo "Push failed"
