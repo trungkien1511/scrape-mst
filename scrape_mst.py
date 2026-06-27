@@ -139,16 +139,16 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
     client = gspread.authorize(creds)
     sheet = client.open_by_url(sheet_url).worksheet(sheet_name)
 
-    # Header mới: MST → SĐT → Người đại diện → Tên → Ngày hoạt động → Cập nhật → Địa chỉ
+    # Header giữ nguyên thứ tự cột ban đầu: MST → Tên → SĐT → Người đại diện → Ngày hoạt động → Cập nhật → Địa chỉ
     if sheet.row_count == 0 or not sheet.row_values(1):
         sheet.append_row([
-            "Mã số thuế", 
-            "Số điện thoại", 
-            "Người đại diện",      # <-- Vị trí mới
-            "Tên doanh nghiệp", 
-            "Ngày hoạt động", 
-            "Ngày cập nhật", 
-            "Địa chỉ"
+            "Tên doanh nghiệp",     # Cột 2
+            "Mã số thuế",           # Cột 1
+            "Số điện thoại",        # Cột 3
+            "Người đại diện",       # Cột 4
+            "Ngày hoạt động",       # Cột 5
+            "Ngày cập nhật",        # Cột 6
+            "Địa chỉ"               # Cột 7
         ])
 
     # Kiểm tra trùng MST (cột 1)
@@ -161,10 +161,10 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
         tax_code = row["tax_code"].strip()
         if tax_code not in existing_tax_codes:
             new_row = [
+                row["name"],                     # 2. Tên doanh nghiệp
                 tax_code,                        # 1. Mã số thuế
-                row.get("phone", ""),            # 2. Số điện thoại
-                row.get("representative", ""),   # 3. Người đại diện (đã chuyển lên)
-                row["name"],                     # 4. Tên doanh nghiệp
+                row.get("phone", ""),            # 3. Số điện thoại
+                row.get("representative", ""),   # 4. Người đại diện
                 row.get("active_date", ""),      # 5. Ngày hoạt động
                 row.get("last_update", ""),      # 6. Ngày cập nhật
                 row.get("address", "")           # 7. Địa chỉ
@@ -182,9 +182,9 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
 # 5. Chạy chính
 # ----------------------------
 if __name__ == "__main__":
-    # NHẬP KHOẢNG TRANG CẦN CRAWL
+    
     start_page = 1
-    end_page = 7
+    end_page = 3
     
     all_companies = []
     
