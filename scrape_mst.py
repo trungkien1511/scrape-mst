@@ -139,16 +139,16 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
     client = gspread.authorize(creds)
     sheet = client.open_by_url(sheet_url).worksheet(sheet_name)
 
-    # Header giữ nguyên thứ tự cột ban đầu: MST → Tên → SĐT → Người đại diện → Ngày hoạt động → Cập nhật → Địa chỉ
+    # Header: MST → Tên → SĐT → Người đại diện → Ngày hoạt động → Cập nhật → Địa chỉ
     if sheet.row_count == 0 or not sheet.row_values(1):
         sheet.append_row([
-            "Tên doanh nghiệp",     # Cột 2
-            "Mã số thuế",           # Cột 1
-            "Số điện thoại",        # Cột 3
-            "Người đại diện",       # Cột 4
-            "Ngày hoạt động",       # Cột 5
-            "Ngày cập nhật",        # Cột 6
-            "Địa chỉ"               # Cột 7
+            "Mã số thuế",
+            "Tên doanh nghiệp",
+            "Số điện thoại",
+            "Người đại diện",
+            "Ngày hoạt động",
+            "Ngày cập nhật",
+            "Địa chỉ"
         ])
 
     # Kiểm tra trùng MST (cột 1)
@@ -161,8 +161,8 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
         tax_code = row["tax_code"].strip()
         if tax_code not in existing_tax_codes:
             new_row = [
-                row["name"],                     # 2. Tên doanh nghiệp
                 tax_code,                        # 1. Mã số thuế
+                row["name"],                     # 2. Tên doanh nghiệp
                 row.get("phone", ""),            # 3. Số điện thoại
                 row.get("representative", ""),   # 4. Người đại diện
                 row.get("active_date", ""),      # 5. Ngày hoạt động
@@ -172,8 +172,17 @@ def save_to_google_sheet(data, sheet_url, sheet_name="Sheet1"):
             new_rows.append(new_row)
 
     if new_rows:
-        for row in reversed(new_rows):
-            sheet.insert_row(row, index=2)
+        # 🔥 QUAN TRỌNG: GỘP TẤT CẢ ROWS VÀO 1 REQUEST DUY NHẤT
+        # Lấy tất cả dữ liệu hiện có trong sheet
+        all_data = sheet.get_all_values()
+        
+        # Thêm các row mới vào cuối
+        for row in new_rows:
+            all_data.append(row)
+        
+        # Cập nhật toàn bộ sheet trong 1 request
+        sheet.update(all_data)
+        
         print(f"Đã thêm {len(new_rows)} công ty mới vào Google Sheet")
     else:
         print("Không có công ty mới để thêm vào Google Sheet")
