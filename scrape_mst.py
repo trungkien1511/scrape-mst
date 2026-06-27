@@ -57,7 +57,7 @@ def classify_location(address):
     # Gần Đà Nẵng (Quảng Nam giáp ranh)
     nearby = [
         'Phường Điện Bàn', 'Phường Điện Bàn Đông', 'Phường Điện Bàn Tây',
-        'Phường Điện Bàn Bắc', 'Phường Bàn Thạch', 'Phường An Thắng',
+        'Phường Điện Bàn Bắc', 'Phường An Thắng',
         'Phường Hội An', 'Phường Hội An Đông', 'Phường Hội An Tây'
     ]
     
@@ -289,8 +289,8 @@ if __name__ == "__main__":
     main_count, other_count = save_to_google_sheets(
         all_companies,
         "https://docs.google.com/spreadsheets/d/1BVtCQdRwuswW812yCF918iKyb5l5A9PKPWZi8VZt_Io/edit?gid=0#gid=0",
-        "Sheet1",  # Sheet 1: TRONG_DA_NANG + NGOAI_THANH_DA_NANG + GAN_DA_NANG
-        "Sheet2"   # Sheet 2: KHAC (bao gồm Duy Xuyên và các khu vực khác)
+        "Sheet2",  # Sheet 1: TRONG_DA_NANG + NGOAI_THANH_DA_NANG + GAN_DA_NANG
+        "Sheet3"   # Sheet 2: KHAC (bao gồm Duy Xuyên và các khu vực khác)
     )
     
     print(f"\n✅ Hoàn thành!")
