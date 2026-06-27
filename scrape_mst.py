@@ -333,8 +333,8 @@ def fetch_company_details(path: str):
 # 6. Chạy chính
 # ----------------------------
 if __name__ == "__main__":
-    start_page = 1
-    end_page = 10
+    start_page = 10
+    end_page = 15
     
     all_companies = []
     
