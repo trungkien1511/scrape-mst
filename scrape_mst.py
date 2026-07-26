@@ -133,7 +133,7 @@ def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet2", sheet_name_
     - Sheet2: TRONG_DA_NANG + NGOAI_THANH_DA_NANG + GAN_DA_NANG
     - Sheet3: KHAC (bao gồm Duy Xuyên và các khu vực khác)
     
-    LƯU Ý: Chỉ thêm công ty nếu có SĐT và tên đại diện là người Việt Nam
+    LƯU Ý: KHÔNG bỏ qua nếu thiếu SĐT, nhưng vẫn kiểm tra tên đại diện (nếu không phải người Việt thì bỏ qua)
     """
     scope = ["https://spreadsheets.google.com/feeds",
              "https://www.googleapis.com/auth/drive"]
@@ -178,7 +178,7 @@ def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet2", sheet_name_
     main_rows = []
     other_rows = []
     
-    skipped_no_phone = 0
+    skipped_no_phone = 0  # vẫn đếm để thống kê, nhưng không skip
     skipped_foreign_rep = 0
     
     for row in data:
@@ -190,13 +190,13 @@ def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet2", sheet_name_
         representative = row.get("representative", "").strip()
         address = row.get("address", "")
         
-        # ⚠️ KIỂM TRA: BỎ QUA NẾU KHÔNG CÓ SỐ ĐIỆN THOẠI
+        # ⚠️ KHÔNG BỎ QUA NẾU THIẾU SĐT – vẫn lấy, để trống ô SĐT
         if not phone:
             skipped_no_phone += 1
-            print(f"  ⏭️ Bỏ qua (không có SĐT): {row['name']} - MST: {tax_code}")
-            continue
+            # Chỉ in thông báo, không continue
+            print(f"  ℹ️ Không có SĐT: {row['name']} - MST: {tax_code} (vẫn thêm vào sheet)")
         
-        # ⚠️ KIỂM TRA: BỎ QUA NẾU TÊN ĐẠI DIỆN KHÔNG PHẢI NGƯỜI VIỆT NAM
+        # ⚠️ KIỂM TRA: BỎ QUA NẾU TÊN ĐẠI DIỆN KHÔNG PHẢI NGƯỜI VIỆT NAM (giữ nguyên)
         if not is_vietnamese_name(representative):
             skipped_foreign_rep += 1
             print(f"  ⏭️ Bỏ qua (tên đại diện không phải người Việt): {row['name']} - Đại diện: {representative}")
@@ -209,7 +209,7 @@ def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet2", sheet_name_
         new_row = [
             row["name"],                     # Tên Công Ty
             tax_code,                        # Mã Số Thuế
-            phone,                           # Số Điện Thoại
+            phone,                           # Số Điện Thoại (có thể rỗng)
             representative,                  # Người đại diện
             row.get("active_date", ""),      # Ngày Cấp
             row.get("last_update", ""),      # Ngày Cập Nhật
@@ -243,7 +243,7 @@ def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet2", sheet_name_
     
     # Thống kê
     print(f"\n📊 Thống kê:")
-    print(f"   - Bỏ qua (không có SĐT): {skipped_no_phone} công ty")
+    print(f"   - Không có SĐT (nhưng vẫn thêm): {skipped_no_phone} công ty")
     print(f"   - Bỏ qua (tên đại diện nước ngoài): {skipped_foreign_rep} công ty")
     print(f"   - Đã thêm vào Sheet2: {len(main_rows)} công ty")
     print(f"   - Đã thêm vào Sheet3: {len(other_rows)} công ty")
