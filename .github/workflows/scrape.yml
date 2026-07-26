@@ -9,7 +9,7 @@ jobs:
   scrape:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # THÊM QUYỀN NÀY
+      contents: write
 
     steps:
       - name: Checkout repo
@@ -24,14 +24,18 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests beautifulsoup4 lxml gspread oauth2client
+          pip install --upgrade pip
+          pip install requests beautifulsoup4 lxml oauth2client
+          pip install --upgrade gspread   # nâng cấp lên bản mới nhất
+
+      - name: Check gspread version
+        run: python -c "import gspread; print('gspread version:', gspread.__version__)"
 
       - name: Run scraper
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
         run: python scrape_mst.py
-      
-      # THÊM BƯỚC NÀY ĐỂ TẠO HOẠT ĐỘNG CHO REPOSITORY
+
       - name: Keep repository active
         run: |
           echo "Last run: $(date)" > .last_run
