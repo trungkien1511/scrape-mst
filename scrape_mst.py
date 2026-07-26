@@ -36,44 +36,41 @@ def should_skip_company(name: str) -> bool:
 # ----------------------------
 def is_vietnamese_name(name: str) -> bool:
     """
-    Kiểm tra tên có phải là tên người Việt Nam không
-    - Tên Việt Nam thường có các dấu tiếng Việt
-    - Không chứa ký tự lạ, số
-    - Thường có họ và tên riêng
+    Kiểm tra tên có phải là tên người Việt Nam.
+    Không chỉ dựa vào họ, mà kết hợp cấu trúc, dấu tiếng Việt và tên riêng.
     """
-    if not name or name.strip() == "":
+    if not name or not name.strip():
         return False
+
+    original = name.strip().upper()
     
-    # Loại bỏ các tên nước ngoài (chứa ký tự latin không dấu, dài)
-    # Các tên nước ngoài thường: KANG DAEJUN, KOZHECHENKOV ARTEM, RUMIANTSEV MAKSIM ALEKSEEVICH
-    # Tên Việt Nam có dấu: NGUYỄN VĂN A, TRẦN THỊ B, PHẠM VĂN C
+    # Loại bỏ nếu có ký tự số hoặc ký tự đặc biệt
+    if re.search(r'[0-9!@#$%^&*()]', original):
+        return False
+
+    # Tách từ (loại bỏ dấu phẩy, chấm...)
+    words = re.findall(r'[A-ZÀ-Ỵ]+', original)  # chỉ lấy chữ cái có dấu và không dấu
+    if len(words) < 2 or len(words) > 4:
+        return False  # tên Việt thường 2-4 từ, loại các tên quá dài hoặc quá ngắn
+
+    # Nếu tên chứa các chữ cái hiếm gặp (J, W, Z) → khả năng cao là nước ngoài
+    if re.search(r'[JWZ]', original):
+        return False
+
+    # Kiểm tra dấu tiếng Việt (thanh điệu và chữ cái đặc trưng)
+    vietnamese_chars = set("ĂÂÊÔƠƯĐ" + "ĂÂÊÔƠƯĐ".lower())
+    tone_marks = set("ÀÁẢÃẠẦẤẨẪẬÈÉẺẼẸỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌỒỐỔỖỘỜỚỞỠỢÙÚỦŨỤỪỨỬỮỰỲÝỶỸỴ")
     
-    # Nếu tên toàn chữ cái Latin không dấu và dài trên 15 ký tự -> có thể là tên nước ngoài
-    # Loại bỏ nếu tên chứa quá nhiều chữ cái không dấu (A-Z) và không có dấu tiếng Việt
-    latin_ratio = len(re.findall(r'[A-Z]', name.upper())) / len(name) if len(name) > 0 else 0
+    has_vietnamese_char = any(ch in original for ch in vietnamese_chars)
+    has_tone = any(ch in original for ch in tone_marks)
     
-    # Nếu hơn 90% là chữ cái Latin và không có dấu tiếng Việt -> tên nước ngoài
-    if latin_ratio > 0.9:
-        # Kiểm tra có dấu tiếng Việt không
-        vietnamese_chars = ['Ă', 'Â', 'Đ', 'Ê', 'Ô', 'Ơ', 'Ư',
-                           'ă', 'â', 'đ', 'ê', 'ô', 'ơ', 'ư',
-                           'À', 'Á', 'Ả', 'Ã', 'Ạ', 'Â', 'Ầ', 'Ấ', 'Ẩ', 'Ẫ', 'Ậ',
-                           'È', 'É', 'Ẻ', 'Ẽ', 'Ẹ', 'Ê', 'Ề', 'Ế', 'Ể', 'Ễ', 'Ệ',
-                           'Ì', 'Í', 'Ỉ', 'Ĩ', 'Ị',
-                           'Ò', 'Ó', 'Ỏ', 'Õ', 'Ọ', 'Ô', 'Ồ', 'Ố', 'Ổ', 'Ỗ', 'Ộ',
-                           'Ơ', 'Ờ', 'Ớ', 'Ở', 'Ỡ', 'Ợ',
-                           'Ù', 'Ú', 'Ủ', 'Ũ', 'Ụ', 'Ư', 'Ừ', 'Ứ', 'Ử', 'Ữ', 'Ự',
-                           'Ỳ', 'Ý', 'Ỷ', 'Ỹ', 'Ỵ']
-        
-        has_vietnamese = any(char in name.upper() for char in vietnamese_chars)
-        
-        # Nếu không có dấu tiếng Việt, có thể là tên nước ngoài
-        if not has_vietnamese:
-            # Thêm kiểm tra độ dài: tên nước ngoài thường dài > 10 ký tự
-            if len(name.strip()) > 10:
-                return False
-    
-    # Tên hợp lệ (có dấu tiếng Việt hoặc tên ngắn)
+    if not (has_vietnamese_char or has_tone):
+        # Không có dấu tiếng Việt → có thể là tên nước ngoài hoặc tên không dấu
+        # Nếu tên ngắn (2 từ) và không có dấu, có thể là trường hợp đặc biệt (ví dụ: NGUYEN VAN A)
+        # nhưng thường thì tên Việt có dấu, nên ta loại
+        return False
+
+    # Kết luận: nếu đạt các điều kiện trên → coi là tên Việt
     return True
 
 # ----------------------------
