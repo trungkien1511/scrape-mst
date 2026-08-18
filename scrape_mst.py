@@ -32,49 +32,7 @@ def should_skip_company(name: str) -> bool:
     return SKIP_REGEX.search(n) is not None
 
 # ----------------------------
-# 2. Hàm kiểm tra tên người đại diện
-# ----------------------------
-def is_vietnamese_name(name: str) -> bool:
-    """
-    Kiểm tra tên có phải là tên người Việt Nam.
-    Không chỉ dựa vào họ, mà kết hợp cấu trúc, dấu tiếng Việt và tên riêng.
-    """
-    if not name or not name.strip():
-        return False
-
-    original = name.strip().upper()
-    
-    # Loại bỏ nếu có ký tự số hoặc ký tự đặc biệt
-    if re.search(r'[0-9!@#$%^&*()]', original):
-        return False
-
-    # Tách từ (loại bỏ dấu phẩy, chấm...)
-    words = re.findall(r'[A-ZÀ-Ỵ]+', original)  # chỉ lấy chữ cái có dấu và không dấu
-    if len(words) < 2 or len(words) > 4:
-        return False  # tên Việt thường 2-4 từ, loại các tên quá dài hoặc quá ngắn
-
-    # Nếu tên chứa các chữ cái hiếm gặp (J, W, Z) → khả năng cao là nước ngoài
-    if re.search(r'[JWZ]', original):
-        return False
-
-    # Kiểm tra dấu tiếng Việt (thanh điệu và chữ cái đặc trưng)
-    vietnamese_chars = set("ĂÂÊÔƠƯĐ" + "ĂÂÊÔƠƯĐ".lower())
-    tone_marks = set("ÀÁẢÃẠẦẤẨẪẬÈÉẺẼẸỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌỒỐỔỖỘỜỚỞỠỢÙÚỦŨỤỪỨỬỮỰỲÝỶỸỴ")
-    
-    has_vietnamese_char = any(ch in original for ch in vietnamese_chars)
-    has_tone = any(ch in original for ch in tone_marks)
-    
-    if not (has_vietnamese_char or has_tone):
-        # Không có dấu tiếng Việt → có thể là tên nước ngoài hoặc tên không dấu
-        # Nếu tên ngắn (2 từ) và không có dấu, có thể là trường hợp đặc biệt (ví dụ: NGUYEN VAN A)
-        # nhưng thường thì tên Việt có dấu, nên ta loại
-        return False
-
-    # Kết luận: nếu đạt các điều kiện trên → coi là tên Việt
-    return True
-
-# ----------------------------
-# 3. Hàm phân loại địa chỉ
+# 2. Hàm phân loại địa chỉ
 # ----------------------------
 def classify_location(address):
     """
@@ -120,7 +78,7 @@ def classify_location(address):
     return "KHAC"
 
 # ----------------------------
-# 4. Lưu vào Google Sheet (2 sheet: Sheet2 và Sheet3)
+# 3. Lưu vào Google Sheet (2 sheet: Sheet2 và Sheet3)
 # ----------------------------
 def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet2", sheet_name_other="Sheet3"):
     """
@@ -130,7 +88,7 @@ def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet2", sheet_name_
     - Sheet2: TRONG_DA_NANG + NGOAI_THANH_DA_NANG + GAN_DA_NANG
     - Sheet3: KHAC (bao gồm Duy Xuyên và các khu vực khác)
     
-    LƯU Ý: KHÔNG bỏ qua nếu thiếu SĐT.
+    LƯU Ý: KHÔNG bỏ qua nếu thiếu SĐT. KHÔNG lọc tên đại diện.
     CHÈN DỮ LIỆU VÀO ĐẦU (DÒNG 2, SAU TIÊU ĐỀ) – GIỮ NGUYÊN THỨ TỰ CỦA DANH SÁCH.
     """
     scope = ["https://spreadsheets.google.com/feeds",
@@ -177,7 +135,6 @@ def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet2", sheet_name_
     other_rows = []
     
     skipped_no_phone = 0
-    skipped_foreign_rep = 0
     
     for row in data:
         if should_skip_company(row["name"]):
@@ -188,16 +145,12 @@ def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet2", sheet_name_
         representative = row.get("representative", "").strip()
         address = row.get("address", "")
         
-        # KHÔNG BỎ QUA NẾU THIẾU SĐT
+        # KHÔNG BỎ QUA NẾU THIẾU SĐT - chỉ đếm và thông báo
         if not phone:
             skipped_no_phone += 1
             print(f"  ℹ️ Không có SĐT: {row['name']} - MST: {tax_code} (vẫn thêm)")
         
-        # KIỂM TRA TÊN ĐẠI DIỆN
-        if not is_vietnamese_name(representative):
-            skipped_foreign_rep += 1
-            print(f"  ⏭️ Bỏ qua (tên đại diện nước ngoài): {row['name']} - Đại diện: {representative}")
-            continue
+        # ✅ BỎ HOÀN TOÀN KIỂM TRA TÊN ĐẠI DIỆN
         
         location_type = classify_location(address)
         
@@ -205,13 +158,14 @@ def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet2", sheet_name_
             row["name"],
             tax_code,
             phone,
-            representative,
+            representative,  # Có thể rỗng
             row.get("active_date", ""),
             row.get("last_update", ""),
             address,
             location_type
         ]
         
+        # Phân loại vào sheet tương ứng
         if location_type in ["TRONG_DA_NANG", "NGOAI_THANH_DA_NANG", "GAN_DA_NANG"]:
             if tax_code not in existing_main_tax:
                 main_rows.append(new_row)
@@ -221,9 +175,9 @@ def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet2", sheet_name_
                 other_rows.append(new_row)
                 existing_other_tax.add(tax_code)
     
-    # --- THAY ĐỔI TẠI ĐÂY: dùng insert_rows với row=2 ---
+    # Chèn dữ liệu vào đầu sheet (dòng 2)
     if main_rows:
-        main_sheet.insert_rows(main_rows, row=2)   # chèn toàn bộ vào dòng 2, giữ nguyên thứ tự
+        main_sheet.insert_rows(main_rows, row=2)
         print(f"Đã thêm {len(main_rows)} công ty vào đầu sheet '{sheet_name_main}' (dòng 2)")
     else:
         print(f"Không có công ty mới để thêm vào sheet '{sheet_name_main}'")
@@ -236,14 +190,13 @@ def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet2", sheet_name_
     
     print(f"\n📊 Thống kê:")
     print(f"   - Không có SĐT (vẫn thêm): {skipped_no_phone} công ty")
-    print(f"   - Bỏ qua (tên đại diện nước ngoài): {skipped_foreign_rep} công ty")
     print(f"   - Đã thêm vào Sheet2: {len(main_rows)} công ty")
     print(f"   - Đã thêm vào Sheet3: {len(other_rows)} công ty")
     
-    return len(main_rows), len(other_rows), skipped_no_phone, skipped_foreign_rep
+    return len(main_rows), len(other_rows), skipped_no_phone
 
 # ----------------------------
-# 5. Các hàm crawl dữ liệu (giữ nguyên)
+# 4. Các hàm crawl dữ liệu
 # ----------------------------
 def parse_list_page(html: str):
     soup = BeautifulSoup(html, "lxml")
@@ -322,7 +275,7 @@ def fetch_company_details(path: str):
         return "", "", "", "", ""
 
 # ----------------------------
-# 6. Chạy chính
+# 5. Chạy chính
 # ----------------------------
 if __name__ == "__main__":
     start_page = 1
@@ -349,15 +302,14 @@ if __name__ == "__main__":
         print(f"  MST: {comp['tax_code']} | Đại diện: {rep} | ĐT: {phone}")
     
     print("\nĐang lưu dữ liệu vào Google Sheet...")
-    main_count, other_count, skipped_no_phone, skipped_foreign_rep = save_to_google_sheets(
+    main_count, other_count, skipped_no_phone = save_to_google_sheets(
         all_companies,
         "https://docs.google.com/spreadsheets/d/1BVtCQdRwuswW812yCF918iKyb5l5A9PKPWZi8VZt_Io/edit?gid=0#gid=0",
-        "Sheet2",  # Sheet 2: TRONG_DA_NANG + NGOAI_THANH_DA_NANG + GAN_DA_NANG
-        "Sheet3"   # Sheet 3: KHAC (bao gồm Duy Xuyên và các khu vực khác)
+        "Sheet2",
+        "Sheet3"
     )
     
     print(f"\n✅ Hoàn thành!")
     print(f"   - Sheet 'Sheet2': {main_count} công ty mới")
     print(f"   - Sheet 'Sheet3': {other_count} công ty mới")
-    print(f"   - Bỏ qua (không có SĐT): {skipped_no_phone} công ty")
-    print(f"   - Bỏ qua (tên đại diện nước ngoài): {skipped_foreign_rep} công ty")
+    print(f"   - Không có SĐT (vẫn thêm): {skipped_no_phone} công ty")
