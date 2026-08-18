@@ -279,7 +279,7 @@ def fetch_company_details(path: str):
 # ----------------------------
 if __name__ == "__main__":
     start_page = 1
-    end_page = 5
+    end_page = 1
     
     all_companies = []
     
