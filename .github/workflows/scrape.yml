@@ -2,9 +2,8 @@ name: Scrape MST
 
 on:
   schedule:
-    # Chạy 2 tiếng 1 lần, từ 8h sáng đến 6h tối (Giờ VN) - Tương đương 1h-11h UTC
-    - cron: "0 1-11/2 * * *"
-  workflow_dispatch: # Cho phép bấm chạy bằng tay khi cần
+    - cron: "0 1-11/2 * * *" # Chạy 2 tiếng 1 lần, từ 8h sáng đến 6h tối (VN)
+  workflow_dispatch: 
 
 jobs:
   scrape:
@@ -15,8 +14,6 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -26,13 +23,14 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install requests beautifulsoup4 lxml gspread google-auth google-auth-oauthlib
+          pip install requests beautifulsoup4 lxml python-dotenv
 
       - name: Run scraper
         env:
-          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
         run: python scrape_mst.py
-
+        
       - name: Keep repository active
         run: |
           echo "Last run: $(date)" > .last_run

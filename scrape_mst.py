@@ -3,11 +3,13 @@ import time
 import random
 import requests
 from bs4 import BeautifulSoup
-import gspread
-from google.oauth2.service_account import Credentials
-import json
 import os
 import unicodedata
+from datetime import datetime
+from dotenv import load_dotenv
+
+# Load biến môi trường
+load_dotenv()
 
 # ----------------------------
 # 1. Cấu hình cơ bản
@@ -35,168 +37,137 @@ def should_skip_company(name: str) -> bool:
 # 2. Hàm phân loại địa chỉ
 # ----------------------------
 def classify_location(address):
-    """
-    Phân loại địa chỉ:
-    - TRONG_DA_NANG: Các quận nội thành
-    - NGOAI_THANH_DA_NANG: Huyện Hòa Vang
-    - GAN_DA_NANG: Các khu vực giáp ranh (Điện Bàn, Hội An, Bàn Thạch, An Thắng)
-    - KHAC: Tất cả các trường hợp còn lại (bao gồm Duy Xuyên và các khu vực khác)
-    """
-    
-    # Trong Đà Nẵng (nội thành)
     inner = [
         'Phường Hải Châu', 'Phường Thanh Khê', 'Phường Sơn Trà',
         'Phường Ngũ Hành Sơn', 'Phường Liên Chiểu', 'Phường Cẩm Lệ',
         'Phường Hòa Cường', 'Phường Hòa Xuân', 'Phường An Khê',
         'Phường An Hải', 'Phường Hòa Khánh', 'Phường Hải Vân'
     ]
-    
-    # Ngoại thành Đà Nẵng (Hòa Vang)
     suburban = ['Xã Bà Nà', 'Xã Hòa Tiến', 'Xã Hòa Vang']
-    
-    # Gần Đà Nẵng (Quảng Nam giáp ranh)
     nearby = [
         'Phường Điện Bàn', 'Phường Điện Bàn Đông', 'Phường Điện Bàn Tây',
         'Phường Điện Bàn Bắc', 'Phường Bàn Thạch', 'Phường An Thắng',
         'Phường Hội An', 'Phường Hội An Đông', 'Phường Hội An Tây'
     ]
     
-    # Kiểm tra lần lượt
     for kw in inner:
-        if kw in address:
-            return "TRONG_DA_NANG"
-    
+        if kw in address: return "inner_da_nang" 
     for kw in suburban:
-        if kw in address:
-            return "NGOAI_THANH_DA_NANG"
-    
+        if kw in address: return "suburban_da_nang"
     for kw in nearby:
-        if kw in address:
-            return "GAN_DA_NANG"
-    
-    # Tất cả các trường hợp còn lại (bao gồm Duy Xuyên và các xã khác)
-    return "KHAC"
+        if kw in address: return "near_da_nang"
+    return "other"
 
 # ----------------------------
-# 3. Lưu vào Google Sheet (2 sheet: Sheet2 và Sheet3)
+# 3. Hàm giao tiếp Turso (HTTP API)
 # ----------------------------
-def save_to_google_sheets(data, sheet_url, sheet_name_main="Sheet2", sheet_name_other="Sheet3"):
-    """
-    Lưu dữ liệu vào 2 sheet với thứ tự cột:
-    Tên Công Ty | Mã Số Thuế | Số Điện Thoại | Người đại diện | Ngày Cấp | Ngày Cập Nhật | Địa Chỉ | Phân Loại
+def execute_turso(url, token, sql, args):
+    hrana_args = []
+    for arg in args:
+        if arg is None:
+            hrana_args.append({"type": "null"})
+        else:
+            hrana_args.append({"type": "text", "value": str(arg)})
+            
+    payload = {
+        "requests": [
+            {"type": "execute", "stmt": {"sql": sql, "args": hrana_args}},
+            {"type": "close"}
+        ]
+    }
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     
-    - Sheet2: TRONG_DA_NANG + NGOAI_THANH_DA_NANG + GAN_DA_NANG
-    - Sheet3: KHAC (bao gồm Duy Xuyên và các khu vực khác)
+    response = requests.post(f"{url}/v2/pipeline", headers=headers, json=payload)
+    if response.status_code != 200:
+        raise Exception(f"Lỗi HTTP {response.status_code}: {response.text}")
+        
+    data = response.json()
+    result = data.get("results", [])[0]
+    if result.get("type") == "error":
+        raise Exception(f"Lỗi SQL: {result.get('error', {}).get('message')}")
+    return result
+
+def parse_vn_date(s: str):
+    s = str(s).strip()
+    if not s or s == "None": return None
+    if "-" in s and len(s) > 8:
+        return s.split(" ")[0] 
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return None
+
+def clean_phone(phone_str):
+    phone = str(phone_str).strip()
+    if phone.endswith(".0"): phone = phone[:-2]
+    if phone and len(phone) == 9 and phone.isdigit(): phone = "0" + phone
+    return phone
+
+# ----------------------------
+# 4. Hàm lưu vào Turso
+# ----------------------------
+def save_to_turso(data):
+    print("\n⏳ Đang kết nối Turso...")
+    turso_url = os.environ.get("TURSO_DATABASE_URL", "").replace("libsql://", "https://")
+    turso_token = os.environ.get("TURSO_AUTH_TOKEN", "")
     
-    LƯU Ý: KHÔNG bỏ qua nếu thiếu SĐT. KHÔNG lọc tên đại diện.
-    CHÈN DỮ LIỆU VÀO ĐẦU (DÒNG 2, SAU TIÊU ĐỀ) – GIỮ NGUYÊN THỨ TỰ CỦA DANH SÁCH.
-    """
-    scope = ["https://spreadsheets.google.com/feeds",
-             "https://www.googleapis.com/auth/drive"]
-    creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
-    creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-    client = gspread.authorize(creds)
-    spreadsheet = client.open_by_url(sheet_url)
-    
-    # Lấy hoặc tạo 2 sheet
-    try:
-        main_sheet = spreadsheet.worksheet(sheet_name_main)
-    except gspread.exceptions.WorksheetNotFound:
-        main_sheet = spreadsheet.add_worksheet(title=sheet_name_main, rows=100, cols=10)
-    
-    try:
-        other_sheet = spreadsheet.worksheet(sheet_name_other)
-    except gspread.exceptions.WorksheetNotFound:
-        other_sheet = spreadsheet.add_worksheet(title=sheet_name_other, rows=100, cols=10)
-    
-    # Header: Tên | MST | SĐT | Đại diện | Ngày Cấp | Ngày Cập Nhật | Địa Chỉ | Phân Loại
-    header = [
-        "Tên Công Ty",
-        "Mã Số Thuế",
-        "Số Điện Thoại",
-        "Người đại diện",
-        "Ngày Cấp",
-        "Ngày Cập Nhật",
-        "Địa Chỉ",
-        "Phân Loại"
-    ]
-    
-    if main_sheet.row_count == 0 or not main_sheet.row_values(1):
-        main_sheet.append_row(header)
-    
-    if other_sheet.row_count == 0 or not other_sheet.row_values(1):
-        other_sheet.append_row(header)
-    
-    # Kiểm tra trùng MST (cột 2)
-    existing_main_tax = set(tc.strip() for tc in main_sheet.col_values(2)[1:] if tc.strip())
-    existing_other_tax = set(tc.strip() for tc in other_sheet.col_values(2)[1:] if tc.strip())
-    
-    main_rows = []
-    other_rows = []
-    
-    skipped_no_phone = 0
-    
-    for row in data:
+    if not turso_url or not turso_token:
+        print("❌ Lỗi: Thiếu TURSO_DATABASE_URL hoặc TURSO_AUTH_TOKEN")
+        return
+
+    success = 0
+    for i, row in enumerate(data, start=1):
         if should_skip_company(row["name"]):
             continue
-        
+            
         tax_code = row["tax_code"].strip()
-        phone = row.get("phone", "").strip()
+        if not tax_code:
+            continue
+
+        phone = clean_phone(row.get("phone", ""))
         representative = row.get("representative", "").strip()
-        address = row.get("address", "")
-        
-        # KHÔNG BỎ QUA NẾU THIẾU SĐT - chỉ đếm và thông báo
-        if not phone:
-            skipped_no_phone += 1
-            print(f"  ℹ️ Không có SĐT: {row['name']} - MST: {tax_code} (vẫn thêm)")
-        
-        # ✅ BỎ HOÀN TOÀN KIỂM TRA TÊN ĐẠI DIỆN
-        
-        location_type = classify_location(address)
-        
-        new_row = [
-            row["name"],
-            tax_code,
-            phone,
-            representative,  # Có thể rỗng
-            row.get("active_date", ""),
-            row.get("last_update", ""),
-            address,
-            location_type
-        ]
-        
-        # Phân loại vào sheet tương ứng
-        if location_type in ["TRONG_DA_NANG", "NGOAI_THANH_DA_NANG", "GAN_DA_NANG"]:
-            if tax_code not in existing_main_tax:
-                main_rows.append(new_row)
-                existing_main_tax.add(tax_code)
-        else:
-            if tax_code not in existing_other_tax:
-                other_rows.append(new_row)
-                existing_other_tax.add(tax_code)
-    
-    # Chèn dữ liệu vào đầu sheet (dòng 2)
-    if main_rows:
-        main_sheet.insert_rows(main_rows, row=2)
-        print(f"Đã thêm {len(main_rows)} công ty vào đầu sheet '{sheet_name_main}' (dòng 2)")
-    else:
-        print(f"Không có công ty mới để thêm vào sheet '{sheet_name_main}'")
-    
-    if other_rows:
-        other_sheet.insert_rows(other_rows, row=2)
-        print(f"Đã thêm {len(other_rows)} công ty vào đầu sheet '{sheet_name_other}' (dòng 2)")
-    else:
-        print(f"Không có công ty mới để thêm vào sheet '{sheet_name_other}'")
-    
-    print(f"\n📊 Thống kê:")
-    print(f"   - Không có SĐT (vẫn thêm): {skipped_no_phone} công ty")
-    print(f"   - Đã thêm vào Sheet2: {len(main_rows)} công ty")
-    print(f"   - Đã thêm vào Sheet3: {len(other_rows)} công ty")
-    
-    return len(main_rows), len(other_rows), skipped_no_phone
+        address = row.get("address", "").strip()
+        active_date = parse_vn_date(row.get("active_date", ""))
+        source_updated_at = parse_vn_date(row.get("last_update", ""))
+        location_category = classify_location(address)
+
+        # Chuyển rỗng thành None để tránh ghi đè dữ liệu cũ bằng chuỗi rỗng
+        db_phone = phone if phone else None
+        db_rep = representative if representative else None
+        db_address = address if address else None
+        db_active_date = active_date if active_date else None
+        db_source_updated_at = source_updated_at if source_updated_at else None
+
+        sql = """INSERT INTO companies 
+                   (company_name, tax_code, phone, representative, active_date, 
+                    source_updated_at, address, location_category, source_url)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(tax_code) DO UPDATE SET
+                   company_name      = excluded.company_name,
+                   phone             = COALESCE(excluded.phone, companies.phone),
+                   representative    = COALESCE(excluded.representative, companies.representative),
+                   active_date       = COALESCE(excluded.active_date, companies.active_date),
+                   source_updated_at = COALESCE(excluded.source_updated_at, companies.source_updated_at),
+                   address           = COALESCE(excluded.address, companies.address),
+                   location_category = excluded.location_category,
+                   updated_at        = datetime('now')"""
+                 
+        args = [row["name"], tax_code, db_phone, db_rep, 
+                db_active_date, db_source_updated_at, db_address, location_category, BASE_URL + row["link"]]
+
+        try:
+            execute_turso(turso_url, turso_token, sql, args)
+            success += 1
+            print(f"  [{i}/{len(data)}] Đã lưu: {tax_code} - {row['name']} | {location_category}")
+        except Exception as e:
+            print(f"  ❌ Lỗi dòng {i} ({tax_code}): {e}")
+
+    print(f"\n🎉 HOÀN TẤT! Đã nạp thành công {success} công ty vào Turso.")
 
 # ----------------------------
-# 4. Các hàm crawl dữ liệu
+# 5. Các hàm crawl dữ liệu
 # ----------------------------
 def parse_list_page(html: str):
     soup = BeautifulSoup(html, "lxml")
@@ -250,19 +221,16 @@ def fetch_company_details(path: str):
         active_tr = soup.find("tr", string=lambda t: t and "Ngày hoạt động" in t)
         if not active_tr:
             active_tr = soup.find("i", class_="fa fa-calendar")
-            if active_tr:
-                active_tr = active_tr.find_parent("tr")
+            if active_tr: active_tr = active_tr.find_parent("tr")
         if active_tr:
             span = active_tr.find("span", class_="copy")
-            if span:
-                active_date = span.get_text(strip=True)
+            if span: active_date = span.get_text(strip=True)
 
         last_update = ""
         update_td = soup.find("td", colspan="2")
         if update_td and "Cập nhật mã số thuế" in update_td.get_text():
             em_tag = update_td.find("em")
-            if em_tag:
-                last_update = em_tag.get_text(strip=True)
+            if em_tag: last_update = em_tag.get_text(strip=True)
 
         addr_td = soup.select_one("td[itemprop='address'] span.copy")
         address = addr_td.get_text(strip=True) if addr_td else ""
@@ -275,7 +243,7 @@ def fetch_company_details(path: str):
         return "", "", "", "", ""
 
 # ----------------------------
-# 5. Chạy chính
+# 6. Chạy chính
 # ----------------------------
 if __name__ == "__main__":
     start_page = 1
@@ -301,15 +269,9 @@ if __name__ == "__main__":
         comp["address"] = address
         print(f"  MST: {comp['tax_code']} | Đại diện: {rep} | ĐT: {phone}")
     
-    print("\nĐang lưu dữ liệu vào Google Sheet...")
-    main_count, other_count, skipped_no_phone = save_to_google_sheets(
-        all_companies,
-        "https://docs.google.com/spreadsheets/d/1BVtCQdRwuswW812yCF918iKyb5l5A9PKPWZi8VZt_Io/edit?gid=0#gid=0",
-        "Sheet2",
-        "Sheet3"
-    )
-    
-    print(f"\n✅ Hoàn thành!")
-    print(f"   - Sheet 'Sheet2': {main_count} công ty mới")
-    print(f"   - Sheet 'Sheet3': {other_count} công ty mới")
-    print(f"   - Không có SĐT (vẫn thêm): {skipped_no_phone} công ty")
+    # 🔥 ĐẢO NGƯỢC MẢNG TẠI ĐÂY: 
+    # Công ty mới nhất (trên cùng web) sẽ được đẩy xuống cuối mảng để nạp sau cùng
+    all_companies.reverse()
+
+    print("\nĐang đẩy dữ liệu trực tiếp lên Turso...")
+    save_to_turso(all_companies)
